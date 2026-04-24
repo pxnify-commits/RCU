@@ -1,89 +1,61 @@
 local Tab = getgenv().FarmHub.Tabs.Farms
-local RF = getgenv().FarmHub.RF
+local RS = game:GetService("ReplicatedStorage")
 local Player = game.Players.LocalPlayer
 
--- Multi-Select für Farms
 local activeFarms = {}
+local autoFarm = false
+
 Tab:CreateDropdown({
-    Name = "Select Farms (Multi-Select)",
+    Name = "Select Farms",
     Options = {"strawberryFarm", "PineappleFarm", "AppleFarm", "GrapeFarm", "CarrotFarm", "BananaFarm"},
-    CurrentOption = {},
     MultipleOptions = true,
-    Callback = function(Options) activeFarms = Options end,
+    Callback = function(opts) activeFarms = opts end
 })
 
-local farmEnabled = false
 Tab:CreateToggle({
-    Name = "Auto Farm (3x every 19 min)",
-    CurrentValue = false,
-    Callback = function(Value)
-        farmEnabled = Value
-        if farmEnabled then
-            task.spawn(function()
-                while farmEnabled do
-                    -- Note: Spam this remote 3 times
-                    for i = 1, 3 do
-                        for _, farm in ipairs(activeFarms) do
-                            pcall(function() RF:InvokeServer(farm) end)
-                        end
+    Name = "Auto Farm (19 Min Loop)",
+    Callback = function(v) autoFarm = v end
+})
+
+-- DEBRIS SECTION
+Tab:CreateSection("Debris")
+local autoDebris = false
+Tab:CreateToggle({
+    Name = "Auto Collect Debris",
+    Callback = function(v) autoDebris = v end
+})
+
+-- LOOP
+task.spawn(function()
+    local BotStr = "jag k\195\164nner en bot, hon heter anna, anna heter hon"
+    local Remote = RS:WaitForChild("Packages"):WaitForChild("Knit"):WaitForChild("Services"):WaitForChild(BotStr):WaitForChild("RF"):WaitForChild(BotStr)
+
+    -- Farm Loop (Hintergrund)
+    task.spawn(function()
+        while true do
+            if autoFarm then
+                for i = 1, 3 do
+                    for _, farm in ipairs(activeFarms) do
+                        pcall(function() Remote:InvokeServer(farm) end)
                     end
-                    task.wait(1140) -- Note: Every 19 min
                 end
-            end)
+                task.wait(1140)
+            end
+            task.wait(1)
         end
-    end,
-})
+    end)
 
-Tab:CreateSection("Collectibles")
-
-local debrisEnabled = false
-Tab:CreateToggle({
-    Name = "Auto Collect Debris (TP + Remote)",
-    CurrentValue = false,
-    Callback = function(Value)
-        debrisEnabled = Value
-        if debrisEnabled then
-            task.spawn(function()
-                while debrisEnabled do
-                    for _, item in ipairs(workspace.Debris:GetChildren()) do
-                        -- Note: Remote collect
-                        pcall(function() RF:InvokeServer(item.Name) end)
-                        -- Note: TP under player
-                        if Player.Character and Player.Character:FindFirstChild("HumanoidRootPart") then
-                            local pos = item:IsA("Model") and item:GetPivot().Position or item.Position
-                            Player.Character.HumanoidRootPart.CFrame = CFrame.new(pos)
-                        end
-                        task.wait(0.1)
-                    end
-                    task.wait(1)
-                end
-            end)
+    -- Debris Loop
+    while true do
+        if autoDebris then
+            for _, item in ipairs(workspace.Debris:GetChildren()) do
+                pcall(function() 
+                    Remote:InvokeServer(item.Name) 
+                    Player.Character.HumanoidRootPart.CFrame = item:GetPivot()
+                end)
+                task.wait(0.1)
+            end
         end
-    end,
-})
-
-local honeyTime = 1
-Tab:CreateSlider({
-    Name = "Honey/Meteor Delay",
-    Range = {0.1, 10},
-    Increment = 0.1,
-    CurrentValue = 1,
-    Callback = function(V) honeyTime = V end,
-})
-
-local honeyEnabled = false
-Tab:CreateToggle({
-    Name = "Auto Honey/Meteor",
-    CurrentValue = false,
-    Callback = function(Value)
-        honeyEnabled = Value
-        if honeyEnabled then
-            task.spawn(function()
-                while honeyEnabled do
-                    pcall(function() RF:InvokeServer() end)
-                    task.wait(honeyTime)
-                end
-            end)
-        end
-    end,
-})
+        task.wait(1)
+    end
+end)
