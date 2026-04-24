@@ -1,59 +1,64 @@
 local Tab = getgenv().FarmHub.Tabs.Eggs
-local RE = getgenv().FarmHub.RE
+local RS = game:GetService("ReplicatedStorage")
 
--- Pfad aus deiner Note
-local EggPath = game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("List"):WaitForChild("Pets"):WaitForChild("Eggs")
+-- Variablen für dieses Modul
+local eggsHatchedCount = 0
+local autoHatch = false
+local selectedEgg = ""
+local hatchDelay = 0.3
 
--- Funktion zum Auslesen der Eier
-local function getEggList()
-    local eggs = {}
-    for _, egg in ipairs(EggPath:GetChildren()) do
-        table.insert(eggs, egg.Name)
-    end
-    -- Falls der Ordner leer ist, ein Backup-Ei anzeigen
-    if #eggs == 0 then table.insert(eggs, "Forest") end
-    return eggs
+-- 1. EIER DYNAMISCH AUSLESEN
+local EggList = {}
+local EggFolder = RS:WaitForChild("Shared"):WaitForChild("List"):WaitForChild("Pets"):WaitForChild("Eggs")
+
+for _, egg in ipairs(EggFolder:GetChildren()) do
+    table.insert(EggList, egg.Name)
 end
+if #EggList == 0 then EggList = {"Forest"} end
+selectedEgg = EggList[1]
 
-local selectedEgg = "Forest"
-local hatchEnabled = false
+-- 2. UI ELEMENTE
+Tab:CreateSection("🥚 Egg Hatching")
 
--- Dropdown mit automatischem Scan
-local EggDropdown = Tab:CreateDropdown({
-    Name = "Select Egg (Auto-Scan)",
-    Options = getEggList(),
-    CurrentOption = {"Forest"},
-    Callback = function(Option) 
-        selectedEgg = Option[1] 
-    end,
+Tab:CreateDropdown({
+    Name = "Select Egg",
+    Options = EggList,
+    CurrentOption = {selectedEgg},
+    Callback = function(opt) selectedEgg = opt[1] end
 })
-
--- Button zum manuellen Aktualisieren der Liste (falls neue Eier ohne Restart kommen)
-Tab:CreateButton({
-    Name = "Refresh Egg List",
-    Callback = function()
-        EggDropdown:Refresh(getEggList())
-    end,
-})
-
-Tab:CreateSection("Hatch Settings")
 
 Tab:CreateToggle({
-    Name = "Auto Open Selected Egg",
+    Name = "Auto Hatch",
     CurrentValue = false,
-    Callback = function(Value)
-        hatchEnabled = Value
-        if hatchEnabled then
-            task.spawn(function()
-                while hatchEnabled do
-                    -- Note: Spam remote with delay of 0.3 seconds
-                    -- Argumente: Name des Eis und die Zahl 2 (aus deinem Script-Snippet)
-                    pcall(function() 
-                        RE:FireServer(selectedEgg, 2) 
-                    end)
-                    task.wait(0.3)
-                end
-            end)
-        end
-    end,
+    Callback = function(v) autoHatch = v end
 })
+
+Tab:CreateSlider({
+    Name = "Hatch Delay",
+    Range = {0.1, 2},
+    Increment = 0.1,
+    CurrentValue = 0.3,
+    Callback = function(v) hatchDelay = v end
+})
+
+Tab:CreateSection("📊 Info")
+local hatchLabel = Tab:CreateLabel("Egg Hatched: 0")
+
+-- 3. HATCH LOOP (Hier wird die Remote erst definiert)
+task.spawn(function()
+    -- Der schwedische Bot-Pfad (Anna Bot)
+    local BotStr = "jag k\195\164nner en bot, hon heter anna, anna heter hon"
+    local Remote = RS:WaitForChild("Packages"):WaitForChild("Knit"):WaitForChild("Services"):WaitForChild(BotStr):WaitForChild("RE"):WaitForChild(BotStr)
+
+    while true do
+        if autoHatch and selectedEgg ~= "" then
+            pcall(function()
+                Remote:FireServer(selectedEgg, 2)
+                eggsHatchedCount = eggsHatchedCount + 1
+                hatchLabel:Set("Egg Hatched: " .. tostring(eggsHatchedCount))
+            end)
+            task.wait(hatchDelay)
+        end
+        task.wait()
+    end
+end)
