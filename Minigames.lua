@@ -1,32 +1,21 @@
 local Tab = getgenv().FarmHub.Tabs.Minigames
 local RS = game:GetService("ReplicatedStorage")
-
 local autoFrozen = false
 
--- 1. UI ELEMENTE
-Tab:CreateSection("🎮 Frozen Treasure")
+Tab:CreateToggle({ Name = "Auto Frozen Treasure", Callback = function(v) autoFrozen = v end })
 
-Tab:CreateToggle({
-    Name = "Auto Frozen Treasure",
-    CurrentValue = false,
-    Callback = function(v) 
-        autoFrozen = v 
-    end
-})
-
--- 2. LOGIK LOOP
 task.spawn(function()
-    local BotStr = "jag k\195\164nner en bot, hon heter anna, anna heter hon"
-    local Remote = RS:WaitForChild("Packages"):WaitForChild("Knit"):WaitForChild("Services"):WaitForChild(BotStr):WaitForChild("RF"):WaitForChild(BotStr)
+    local KnitServices = RS:WaitForChild("Packages"):WaitForChild("Knit"):WaitForChild("Services")
+    local BotService = nil
+    for _, v in ipairs(KnitServices:GetChildren()) do
+        if v.Name:find("anna heter hon") then BotService = v break end
+    end
 
-    while true do
-        if autoFrozen then
-            pcall(function() 
-                -- Note: Remote for Frozen Treasure
-                Remote:InvokeServer("normal") 
-            end)
-            task.wait(2) -- Kleiner Delay zur Stabilität
+    if BotService then
+        local Remote = BotService:WaitForChild("RF"):FindFirstChildWhichIsA("RemoteFunction")
+        while true do
+            if autoFrozen and Remote then pcall(function() Remote:InvokeServer("normal") end) end
+            task.wait(2)
         end
-        task.wait(0.5)
     end
 end)
