@@ -10,23 +10,35 @@ local autoHatch = false
 local selectedEgg = ""
 local hatchDelay = 0.3
 
--- 1. EIER DIREKT AUS DEM PFAD HOLEN
--- game:GetService("ReplicatedStorage").Shared.List.Pets.Eggs
-local EggPath = RS:WaitForChild("Shared"):WaitForChild("List"):WaitForChild("Pets"):WaitForChild("Eggs")
+-- 1. EIER AUS DEM MODULESCRIPT AUSLESEN
+local EggList = {}
 
 local function getEggNames()
     local names = {}
-    for _, egg in ipairs(EggPath:GetChildren()) do
-        -- Wir nehmen den Namen des Objekts (z.B. "Desert")
-        table.insert(names, egg.Name)
-    end
-    -- Sortieren für bessere Übersicht
+    -- Pfad zum ModuleScript (Shared.List.Pets.Eggs ist oft ein Modul)
+    local success, result = pcall(function()
+        local Path = RS.Shared.List.Pets.Eggs
+        if Path:IsA("ModuleScript") then
+            local data = require(Path)
+            for eggName, _ in pairs(data) do
+                if type(eggName) == "string" then
+                    table.insert(names, eggName)
+                end
+            end
+        else
+            -- Falls es doch ein Ordner ist
+            for _, egg in ipairs(Path:GetChildren()) do
+                table.insert(names, egg.Name)
+            end
+        end
+    end)
+    
     table.sort(names)
-    return names
+    return #names > 0 and names or {"Forest", "Desert"} -- Backup
 end
 
-local EggList = getEggNames()
-selectedEgg = EggList[1] or "Desert"
+EggList = getEggNames()
+selectedEgg = EggList[1]
 
 -- 2. UI ELEMENTE
 Tab:CreateSection("🥚 Egg Hatching")
@@ -37,13 +49,6 @@ local EggDropdown = Tab:CreateDropdown({
     CurrentOption = {selectedEgg},
     Callback = function(opt) 
         selectedEgg = opt[1] 
-    end
-})
-
-Tab:CreateButton({
-    Name = "Refresh Eggs",
-    Callback = function()
-        EggDropdown:Refresh(getEggNames())
     end
 })
 
@@ -64,28 +69,20 @@ Tab:CreateSlider({
 Tab:CreateSection("📊 Info")
 local hatchLabel = Tab:CreateLabel("Egg Hatched: 0")
 
--- 3. AUTO HATCH LOGIK (Remote Hook)
+-- 3. AUTO HATCH LOGIK
 task.spawn(function()
     local KnitServices = RS:WaitForChild("Packages"):WaitForChild("Knit"):WaitForChild("Services")
     local BotStr = "jag k\195\164nner en bot, hon heter anna, anna heter hon"
     
-    -- Sicherer Zugriff auf den Service
+    -- Den Service sicher finden
     local BotService = KnitServices:WaitForChild(BotStr, 10)
-    if not BotService then
-        warn("❌ Bot Service (Anna) nicht gefunden!")
-        return
-    end
-
-    -- Zugriff auf die Remote (RE)
-    local Remote = BotService:WaitForChild("RE"):WaitForChild(BotStr, 10)
+    local Remote = BotService and BotService:WaitForChild("RE"):WaitForChild(BotStr, 10)
 
     while true do
         if autoHatch and selectedEgg ~= "" and Remote then
             pcall(function()
-                -- Dein angegebener Remote-Aufruf:
-                -- args sind typischerweise (EggName, Amount)
-                -- Wir nutzen '2' als Amount, wie im vorherigen Snippet
-                Remote:FireServer(selectedEgg, 2)
+                -- Remote Call wie von dir bestätigt
+                Remote:FireServer(selectedEgg, 1) -- '1' oder '2' für die Menge
                 
                 eggsHatchedCount = eggsHatchedCount + 1
                 hatchLabel:Set("Egg Hatched: " .. tostring(eggsHatchedCount))
