@@ -4,26 +4,29 @@ repeat task.wait() until getgenv().FarmHub and getgenv().FarmHub.CoreLoaded == t
 local Tab = getgenv().FarmHub.Tabs.Eggs
 local RS = game:GetService("ReplicatedStorage")
 
--- 1. EIER DYNAMISCH AUSLESEN (Exakter Pfad aus deiner Note)
-local EggList = {}
-local selectedEgg = ""
+-- Variablen
 local eggsHatchedCount = 0
 local autoHatch = false
+local selectedEgg = ""
 local hatchDelay = 0.3
 
--- Zugriff auf den von dir genannten Pfad
+-- 1. EIER DIREKT AUS DEM PFAD HOLEN
+-- game:GetService("ReplicatedStorage").Shared.List.Pets.Eggs
 local EggPath = RS:WaitForChild("Shared"):WaitForChild("List"):WaitForChild("Pets"):WaitForChild("Eggs")
 
-local function updateEggList()
-    local list = {}
+local function getEggNames()
+    local names = {}
     for _, egg in ipairs(EggPath:GetChildren()) do
-        table.insert(list, egg.Name)
+        -- Wir nehmen den Namen des Objekts (z.B. "Desert")
+        table.insert(names, egg.Name)
     end
-    return list
+    -- Sortieren für bessere Übersicht
+    table.sort(names)
+    return names
 end
 
-EggList = updateEggList()
-selectedEgg = EggList[1] or "Forest"
+local EggList = getEggNames()
+selectedEgg = EggList[1] or "Desert"
 
 -- 2. UI ELEMENTE
 Tab:CreateSection("🥚 Egg Hatching")
@@ -37,12 +40,11 @@ local EggDropdown = Tab:CreateDropdown({
     end
 })
 
--- Button zum manuellen Aktualisieren, falls das Spiel neue Eier lädt
 Tab:CreateButton({
-    Name = "Refresh Egg List",
+    Name = "Refresh Eggs",
     Callback = function()
-        EggDropdown:Refresh(updateEggList())
-    end,
+        EggDropdown:Refresh(getEggNames())
+    end
 })
 
 Tab:CreateToggle({
@@ -62,30 +64,29 @@ Tab:CreateSlider({
 Tab:CreateSection("📊 Info")
 local hatchLabel = Tab:CreateLabel("Egg Hatched: 0")
 
--- 3. LOGIK-LOOP (Suche nach der Remote im Hintergrund)
+-- 3. AUTO HATCH LOGIK (Remote Hook)
 task.spawn(function()
     local KnitServices = RS:WaitForChild("Packages"):WaitForChild("Knit"):WaitForChild("Services")
-    local BotService = nil
+    local BotStr = "jag k\195\164nner en bot, hon heter anna, anna heter hon"
     
-    -- Suche den Service per Teil-Name (vermeidet Encoding-Probleme mit 'ä')
-    while not BotService do
-        for _, v in ipairs(KnitServices:GetChildren()) do
-            if v.Name:find("anna heter hon") then
-                BotService = v
-                break
-            end
-        end
-        task.wait(1)
+    -- Sicherer Zugriff auf den Service
+    local BotService = KnitServices:WaitForChild(BotStr, 10)
+    if not BotService then
+        warn("❌ Bot Service (Anna) nicht gefunden!")
+        return
     end
 
-    -- Wenn der Service gefunden wurde, die Remote greifen
-    local Remote = BotService:WaitForChild("RE"):FindFirstChildWhichIsA("RemoteEvent")
+    -- Zugriff auf die Remote (RE)
+    local Remote = BotService:WaitForChild("RE"):WaitForChild(BotStr, 10)
 
     while true do
         if autoHatch and selectedEgg ~= "" and Remote then
-            pcall(function() 
-                -- Note: args = { EggName, Quantity } -> Quantity ist 2 laut deinem Snippet
+            pcall(function()
+                -- Dein angegebener Remote-Aufruf:
+                -- args sind typischerweise (EggName, Amount)
+                -- Wir nutzen '2' als Amount, wie im vorherigen Snippet
                 Remote:FireServer(selectedEgg, 2)
+                
                 eggsHatchedCount = eggsHatchedCount + 1
                 hatchLabel:Set("Egg Hatched: " .. tostring(eggsHatchedCount))
             end)
