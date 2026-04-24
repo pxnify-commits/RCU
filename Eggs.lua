@@ -1,100 +1,84 @@
--- Warten, bis das UI-Grundgerüst wirklich existiert
+-- RCU Modular Hub | Eggs Module
 repeat task.wait() until getgenv().FarmHub and getgenv().FarmHub.CoreLoaded == true
 
-local Tab = getgenv().FarmHub.Tabs.Eggs
 local RS = game:GetService("ReplicatedStorage")
+local AnnaService
 
--- Variablen
-local eggsHatchedCount = 0
-local autoHatch = false
-local selectedEgg = ""
-local hatchDelay = 0.3
-
--- 1. EIER AUS DEM WORKSPACE HOLEN
-local function getEggNames()
-    local names = {}
-    -- Wir greifen direkt auf workspace.Eggs zu
-    local EggFolder = workspace:FindFirstChild("Eggs")
-    
-    if EggFolder then
-        for _, egg in ipairs(EggFolder:GetChildren()) do
-            -- Wir fügen den Namen des Objekts zur Liste hinzu
-            if not table.find(names, egg.Name) then
-                table.insert(names, egg.Name)
-            end
+-- Dynamisch nach dem Anna-Service suchen (Encoding-sicher)
+repeat
+    task.wait(0.5)
+    for _, v in pairs(RS.Packages.Knit.Services:GetChildren()) do
+        if v.Name:find("anna heter hon") then
+            AnnaService = v
+            break
         end
     end
-    
-    table.sort(names)
-    -- Falls der Ordner leer ist, ein paar Standardnamen als Backup
-    if #names == 0 then names = {"Forest", "Desert", "Snow"} end
-    return names
+until AnnaService
+
+local HatchRemote = AnnaService:WaitForChild("RE"):WaitForChild(AnnaService.Name)
+local Tab = getgenv().FarmHub.Tabs["Eggs"]
+
+-- Egg-Liste dynamisch aus ReplicatedStorage lesen
+local eggList = {}
+local success, eggsFolder = pcall(function()
+    return RS:WaitForChild("Shared", 5)
+             :WaitForChild("List", 5)
+             :WaitForChild("Pets", 5)
+             :WaitForChild("Eggs", 5)
+end)
+
+if success and eggsFolder then
+    for _, egg in pairs(eggsFolder:GetChildren()) do
+        table.insert(eggList, egg.Name)
+    end
 end
+if #eggList == 0 then eggList = {"Forest", "Meadow", "Ocean"} end
 
-local EggList = getEggNames()
-selectedEgg = EggList[1]
+-- State
+local selectedEgg = eggList[1]
+local hatchAmount = 2
+local hatchActive = false
 
--- 2. UI ELEMENTE
-Tab:CreateSection("🥚 Egg Hatching")
+-- UI
+Tab:CreateLabel("🥚  Egg Hatcher")
 
-local EggDropdown = Tab:CreateDropdown({
+Tab:CreateDropdown({
     Name = "Select Egg",
-    Options = EggList,
+    Options = eggList,
     CurrentOption = {selectedEgg},
-    Callback = function(opt) 
-        selectedEgg = opt[1] 
-    end
-})
-
--- Button zum Aktualisieren, falls neue Eier im Workspace spawnen
-Tab:CreateButton({
-    Name = "Refresh Egg List",
-    Callback = function()
-        EggDropdown:Refresh(getEggNames())
-    end
-})
-
-Tab:CreateToggle({
-    Name = "Auto Hatch",
-    CurrentValue = false,
-    Callback = function(v) autoHatch = v end
+    Flag = "EggSelect",
+    Callback = function(val)
+        selectedEgg = (type(val) == "table" and val[1]) or val or selectedEgg
+    end,
 })
 
 Tab:CreateSlider({
-    Name = "Hatch Delay",
-    Range = {0.1, 2},
-    Increment = 0.1,
-    CurrentValue = 0.3,
-    Callback = function(v) hatchDelay = v end
+    Name = "Hatch Amount",
+    Range = {1, 10},
+    Increment = 1,
+    Suffix = "x",
+    CurrentValue = hatchAmount,
+    Flag = "HatchAmount",
+    Callback = function(val)
+        hatchAmount = val
+    end,
 })
 
-Tab:CreateSection("📊 Info")
-local hatchLabel = Tab:CreateLabel("Egg Hatched: 0")
-
--- 3. AUTO HATCH LOGIK
-task.spawn(function()
-    local KnitServices = RS:WaitForChild("Packages"):WaitForChild("Knit"):WaitForChild("Services")
-    local BotStr = "jag k\195\164nner en bot, hon heter anna, anna heter hon"
-    
-    -- Den Service finden (mit Timeout von 10 Sek)
-    local BotService = KnitServices:WaitForChild(BotStr, 10)
-    if not BotService then 
-        warn("❌ Bot Service nicht gefunden!") 
-        return 
-    end
-
-    local Remote = BotService:WaitForChild("RE"):WaitForChild(BotStr, 10)
-
-    while true do
-        if autoHatch and selectedEgg ~= "" and Remote then
-            pcall(function()
-                -- Remote-Aufruf mit dem Namen des ausgewählten Eies
-                Remote:FireServer(selectedEgg, 1) -- 1 = Menge
-                
-                eggsHatchedCount = eggsHatchedCount + 1
-                hatchLabel:Set("Egg Hatched: " .. tostring(eggsHatchedCount))
+Tab:CreateToggle({
+    Name = "Auto Hatch  [0.3s]",
+    CurrentValue = false,
+    Flag = "AutoHatch",
+    Callback = function(state)
+        hatchActive = state
+        if state then
+            task.spawn(function()
+                while hatchActive do
+                    pcall(function()
+                        HatchRemote:FireServer(selectedEgg, hatchAmount)
+                    end)
+                    task.wait(0.3)
+                end
             end)
         end
-        task.wait(hatchDelay)
-    end
-end)
+    end,
+})
