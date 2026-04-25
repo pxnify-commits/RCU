@@ -1,84 +1,82 @@
--- RCU Modular Hub | Eggs Module
+-- Warten auf Core
 repeat task.wait() until getgenv().FarmHub and getgenv().FarmHub.CoreLoaded == true
 
+local Tab = getgenv().FarmHub.Tabs.Eggs
 local RS = game:GetService("ReplicatedStorage")
-local AnnaService
+local EggFolder = workspace:WaitForChild("Eggs", 10)
 
--- Dynamisch nach dem Anna-Service suchen (Encoding-sicher)
-repeat
-    task.wait(0.5)
-    for _, v in pairs(RS.Packages.Knit.Services:GetChildren()) do
-        if v.Name:find("anna heter hon") then
-            AnnaService = v
-            break
+local eggsHatchedCount = 0
+local autoHatch = false
+local selectedEgg = ""
+local hatchDelay = 0.3
+
+-- Eier aus Workspace auslesen
+local function getEggs()
+    local names = {}
+    if EggFolder then
+        for _, v in ipairs(EggFolder:GetChildren()) do
+            if not table.find(names, v.Name) then table.insert(names, v.Name) end
         end
     end
-until AnnaService
-
-local HatchRemote = AnnaService:WaitForChild("RE"):WaitForChild(AnnaService.Name)
-local Tab = getgenv().FarmHub.Tabs["Eggs"]
-
--- Egg-Liste dynamisch aus ReplicatedStorage lesen
-local eggList = {}
-local success, eggsFolder = pcall(function()
-    return RS:WaitForChild("Shared", 5)
-             :WaitForChild("List", 5)
-             :WaitForChild("Pets", 5)
-             :WaitForChild("Eggs", 5)
-end)
-
-if success and eggsFolder then
-    for _, egg in pairs(eggsFolder:GetChildren()) do
-        table.insert(eggList, egg.Name)
-    end
+    table.sort(names)
+    return #names > 0 and names or {"Forest"}
 end
-if #eggList == 0 then eggList = {"Forest", "Meadow", "Ocean"} end
 
--- State
-local selectedEgg = eggList[1]
-local hatchAmount = 2
-local hatchActive = false
+local currentEggs = getEggs()
+selectedEgg = currentEggs[1]
 
--- UI
-Tab:CreateLabel("🥚  Egg Hatcher")
+Tab:CreateSection("🥚 Egg Hatching")
 
-Tab:CreateDropdown({
+local Dropdown = Tab:CreateDropdown({
     Name = "Select Egg",
-    Options = eggList,
+    Options = currentEggs,
     CurrentOption = {selectedEgg},
-    Flag = "EggSelect",
-    Callback = function(val)
-        selectedEgg = (type(val) == "table" and val[1]) or val or selectedEgg
-    end,
+    Callback = function(opt) selectedEgg = opt[1] end
 })
 
-Tab:CreateSlider({
-    Name = "Hatch Amount",
-    Range = {1, 10},
-    Increment = 1,
-    Suffix = "x",
-    CurrentValue = hatchAmount,
-    Flag = "HatchAmount",
-    Callback = function(val)
-        hatchAmount = val
-    end,
+Tab:CreateButton({
+    Name = "Refresh List",
+    Callback = function() Dropdown:Refresh(getEggs()) end
 })
 
 Tab:CreateToggle({
-    Name = "Auto Hatch  [0.3s]",
-    CurrentValue = false,
-    Flag = "AutoHatch",
-    Callback = function(state)
-        hatchActive = state
-        if state then
-            task.spawn(function()
-                while hatchActive do
-                    pcall(function()
-                        HatchRemote:FireServer(selectedEgg, hatchAmount)
-                    end)
-                    task.wait(0.3)
-                end
+    Name = "Auto Hatch",
+    Callback = function(v) autoHatch = v end
+})
+
+Tab:CreateSlider({
+    Name = "Hatch Delay",
+    Range = {0.1, 2},
+    Increment = 0.1,
+    CurrentValue = 0.3,
+    Callback = function(v) hatchDelay = v end
+})
+
+local hatchLabel = Tab:CreateLabel("Hatched: 0")
+
+-- Knit Remote Suche & Loop
+task.spawn(function()
+    local KnitServices = RS:WaitForChild("Packages"):WaitForChild("Knit"):WaitForChild("Services")
+    local BotService = nil
+    
+    -- Such-Loop für den Anna-Bot (umgeht Knit-Tarnung)
+    while not BotService do
+        for _, v in ipairs(KnitServices:GetChildren()) do
+            if v.Name:find("anna heter hon") then BotService = v break end
+        end
+        task.wait(1)
+    end
+
+    local Remote = BotService:WaitForChild("RE"):FindFirstChildWhichIsA("RemoteEvent")
+
+    while true do
+        if autoHatch and selectedEgg ~= "" and Remote then
+            pcall(function()
+                Remote:FireServer(selectedEgg, 1)
+                eggsHatchedCount = eggsHatchedCount + 1
+                hatchLabel:Set("Hatched: " .. tostring(eggsHatchedCount))
             end)
         end
-    end,
-})
+        task.wait(hatchDelay)
+    end
+end)
