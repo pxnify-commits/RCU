@@ -1,19 +1,18 @@
--- Warten auf Core
+-- Warten auf das UI
 repeat task.wait() until getgenv().FarmHub and getgenv().FarmHub.CoreLoaded == true
 
 local Tab = getgenv().FarmHub.Tabs.Eggs
 local RS = game:GetService("ReplicatedStorage")
 
 local autoHatch = false
-local selectedEgg = "200M" -- Standard gesetzt
+local selectedEgg = "200M"
 local hatchDelay = 0.3
 
--- 1. EIER AUS DEM SPIEL-SYSTEM AUSLESEN (Sicherer Weg)
+-- 1. Eier-Liste laden (Sicherer Pfad aus deinem Modul-Screenshot)
 local function getEggList()
     local names = {}
-    -- Pfad aus deinem Screenshot image_9502b5.png
     local success, data = pcall(function()
-        return require(RS.Shared.List.Pets.Eggs)
+        return require(RS:WaitForChild("Shared"):WaitForChild("List"):WaitForChild("Pets"):WaitForChild("Eggs"))
     end)
     
     if success and type(data) == "table" then
@@ -21,52 +20,58 @@ local function getEggList()
             table.insert(names, tostring(eggName))
         end
     else
-        -- Backup, falls das Modul nicht geladen werden kann
-        names = {"200M", "Forest", "Desert", "Snow", "Volcano"}
+        names = {"200M", "Forest", "Desert"} -- Fallback
     end
     table.sort(names)
     return names
 end
 
-local eggOptions = getEggList()
-
--- 2. UI ELEMENTE
-Tab:CreateSection("🥚 Egg Hatching")
+-- 2. UI erstellen
+Tab:CreateSection("🥚 Auto Hatcher")
 
 local Dropdown = Tab:CreateDropdown({
     Name = "Select Egg",
-    Options = eggOptions,
+    Options = getEggList(),
     CurrentOption = {selectedEgg},
     Callback = function(opt) selectedEgg = opt[1] end
 })
 
 Tab:CreateToggle({
     Name = "Auto Hatch",
+    CurrentValue = false,
     Callback = function(v) autoHatch = v end
 })
 
 Tab:CreateSlider({
-    Name = "Hatch Delay",
+    Name = "Hatch Speed",
     Range = {0.1, 2},
     Increment = 0.1,
     CurrentValue = 0.3,
     Callback = function(v) hatchDelay = v end
 })
 
--- 3. AUTO HATCH LOOP (Der funktionierende Remote-Weg)
+-- 3. DER FIX: Remote-Loop ohne Blockieren
 task.spawn(function()
-    local BotStr = "jag k\195\164nner en bot, hon heter anna, anna heter hon"
-    local Knit = RS:WaitForChild("Packages"):WaitForChild("Knit"):WaitForChild("Services")
-    local Service = Knit:WaitForChild(BotStr, 15)
-    local Remote = Service and Service:WaitForChild("RE"):WaitForChild(BotStr, 15)
+    local botName = "jag k\195\164nner en bot, hon heter anna, anna heter hon"
+    local KnitServices = RS:WaitForChild("Packages"):WaitForChild("Knit"):WaitForChild("Services")
+    
+    -- Wir suchen NUR den RE Ordner, wir ignorieren RF komplett!
+    local AnnaService = KnitServices:WaitForChild(botName, 15)
+    local RE_Folder = AnnaService:WaitForChild("RE", 10)
+    local Remote = RE_Folder:WaitForChild(botName, 10)
 
-    while true do
-        if autoHatch and Remote then
-            pcall(function()
-                -- Nutzt exakt deine verifizierten Argumente: Name und Menge 2
-                Remote:FireServer(selectedEgg, 2)
-            end)
+    if Remote then
+        print("✅ Remote für Hatch gefunden! Loop aktiv.")
+        while true do
+            if autoHatch and selectedEgg ~= "" then
+                -- Wir feuern die Remote exakt so, wie SimpleSpy es getan hat
+                pcall(function()
+                    Remote:FireServer(selectedEgg, 1) -- Menge 1 oder 2 testen
+                end)
+            end
+            task.wait(hatchDelay)
         end
-        task.wait(hatchDelay)
+    else
+        warn("❌ Remote konnte nicht gefunden werden - Script abgebrochen.")
     end
 end)
