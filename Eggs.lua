@@ -3,40 +3,41 @@ repeat task.wait() until getgenv().FarmHub and getgenv().FarmHub.CoreLoaded == t
 
 local Tab = getgenv().FarmHub.Tabs.Eggs
 local RS = game:GetService("ReplicatedStorage")
-local EggFolder = workspace:WaitForChild("Eggs", 10)
 
-local eggsHatchedCount = 0
 local autoHatch = false
-local selectedEgg = ""
+local selectedEgg = "200M" -- Standard gesetzt
 local hatchDelay = 0.3
 
--- Eier aus Workspace auslesen
-local function getEggs()
+-- 1. EIER AUS DEM SPIEL-SYSTEM AUSLESEN (Sicherer Weg)
+local function getEggList()
     local names = {}
-    if EggFolder then
-        for _, v in ipairs(EggFolder:GetChildren()) do
-            if not table.find(names, v.Name) then table.insert(names, v.Name) end
+    -- Pfad aus deinem Screenshot image_9502b5.png
+    local success, data = pcall(function()
+        return require(RS.Shared.List.Pets.Eggs)
+    end)
+    
+    if success and type(data) == "table" then
+        for eggName, _ in pairs(data) do
+            table.insert(names, tostring(eggName))
         end
+    else
+        -- Backup, falls das Modul nicht geladen werden kann
+        names = {"200M", "Forest", "Desert", "Snow", "Volcano"}
     end
     table.sort(names)
-    return #names > 0 and names or {"Forest"}
+    return names
 end
 
-local currentEggs = getEggs()
-selectedEgg = currentEggs[1]
+local eggOptions = getEggList()
 
+-- 2. UI ELEMENTE
 Tab:CreateSection("🥚 Egg Hatching")
 
 local Dropdown = Tab:CreateDropdown({
     Name = "Select Egg",
-    Options = currentEggs,
+    Options = eggOptions,
     CurrentOption = {selectedEgg},
     Callback = function(opt) selectedEgg = opt[1] end
-})
-
-Tab:CreateButton({
-    Name = "Refresh List",
-    Callback = function() Dropdown:Refresh(getEggs()) end
 })
 
 Tab:CreateToggle({
@@ -52,29 +53,18 @@ Tab:CreateSlider({
     Callback = function(v) hatchDelay = v end
 })
 
-local hatchLabel = Tab:CreateLabel("Hatched: 0")
-
--- Knit Remote Suche & Loop
+-- 3. AUTO HATCH LOOP (Der funktionierende Remote-Weg)
 task.spawn(function()
-    local KnitServices = RS:WaitForChild("Packages"):WaitForChild("Knit"):WaitForChild("Services")
-    local BotService = nil
-    
-    -- Such-Loop für den Anna-Bot (umgeht Knit-Tarnung)
-    while not BotService do
-        for _, v in ipairs(KnitServices:GetChildren()) do
-            if v.Name:find("anna heter hon") then BotService = v break end
-        end
-        task.wait(1)
-    end
-
-    local Remote = BotService:WaitForChild("RE"):FindFirstChildWhichIsA("RemoteEvent")
+    local BotStr = "jag k\195\164nner en bot, hon heter anna, anna heter hon"
+    local Knit = RS:WaitForChild("Packages"):WaitForChild("Knit"):WaitForChild("Services")
+    local Service = Knit:WaitForChild(BotStr, 15)
+    local Remote = Service and Service:WaitForChild("RE"):WaitForChild(BotStr, 15)
 
     while true do
-        if autoHatch and selectedEgg ~= "" and Remote then
+        if autoHatch and Remote then
             pcall(function()
-                Remote:FireServer(selectedEgg, 1)
-                eggsHatchedCount = eggsHatchedCount + 1
-                hatchLabel:Set("Hatched: " .. tostring(eggsHatchedCount))
+                -- Nutzt exakt deine verifizierten Argumente: Name und Menge 2
+                Remote:FireServer(selectedEgg, 2)
             end)
         end
         task.wait(hatchDelay)
