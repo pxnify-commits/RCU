@@ -8,27 +8,23 @@ local autoHatch = false
 local selectedEgg = "200M"
 local hatchDelay = 0.3
 
--- 1. Eier-Liste laden (Sicherer Pfad aus deinem Modul-Screenshot)
+-- 1. EIER-LISTE LADEN
 local function getEggList()
     local names = {}
     local success, data = pcall(function()
         return require(RS:WaitForChild("Shared"):WaitForChild("List"):WaitForChild("Pets"):WaitForChild("Eggs"))
     end)
-    
     if success and type(data) == "table" then
-        for eggName, _ in pairs(data) do
-            table.insert(names, tostring(eggName))
-        end
+        for eggName, _ in pairs(data) do table.insert(names, tostring(eggName)) end
     else
-        names = {"200M", "Forest", "Desert"} -- Fallback
+        names = {"200M", "Forest"} 
     end
     table.sort(names)
     return names
 end
 
--- 2. UI erstellen
-Tab:CreateSection("🥚 Auto Hatcher")
-
+-- 2. UI
+Tab:CreateSection("🥚 Multi-Remote Hatcher")
 local Dropdown = Tab:CreateDropdown({
     Name = "Select Egg",
     Options = getEggList(),
@@ -38,40 +34,43 @@ local Dropdown = Tab:CreateDropdown({
 
 Tab:CreateToggle({
     Name = "Auto Hatch",
-    CurrentValue = false,
     Callback = function(v) autoHatch = v end
 })
 
-Tab:CreateSlider({
-    Name = "Hatch Speed",
-    Range = {0.1, 2},
-    Increment = 0.1,
-    CurrentValue = 0.3,
-    Callback = function(v) hatchDelay = v end
-})
-
--- 3. DER FIX: Remote-Loop ohne Blockieren
+-- 3. DER FIX: SCANNE ALLE ORDNER UND FEUERE ALLE REMOTES
 task.spawn(function()
     local botName = "jag k\195\164nner en bot, hon heter anna, anna heter hon"
     local KnitServices = RS:WaitForChild("Packages"):WaitForChild("Knit"):WaitForChild("Services")
-    
-    -- Wir suchen NUR den RE Ordner, wir ignorieren RF komplett!
-    local AnnaService = KnitServices:WaitForChild(botName, 15)
-    local RE_Folder = AnnaService:WaitForChild("RE", 10)
-    local Remote = RE_Folder:WaitForChild(botName, 10)
+    local ValidRemotes = {}
 
-    if Remote then
-        print("✅ Remote für Hatch gefunden! Loop aktiv.")
-        while true do
-            if autoHatch and selectedEgg ~= "" then
-                -- Wir feuern die Remote exakt so, wie SimpleSpy es getan hat
+    print("🔍 Suche nach allen Remotes in der Ordner-Flut...")
+
+    -- Wir suchen alle möglichen Remotes und speichern sie in einer Tabelle
+    for _, folder in ipairs(KnitServices:GetChildren()) do
+        if folder.Name == botName then
+            local reFolder = folder:FindFirstChild("RE")
+            if reFolder then
+                local remote = reFolder:FindFirstChild(botName)
+                if remote and remote:IsA("RemoteEvent") then
+                    table.insert(ValidRemotes, remote)
+                end
+            end
+        end
+    end
+
+    print("✅ " .. #ValidRemotes .. " mögliche Remotes gefunden. Starte Multi-Fire...")
+
+    -- Endlos-Loop
+    while true do
+        if autoHatch and selectedEgg ~= "" then
+            -- Wir gehen JEDE gefundene Remote durch und feuern sie
+            for _, remote in ipairs(ValidRemotes) do
                 pcall(function()
-                    Remote:FireServer(selectedEgg, 1) -- Menge 1 oder 2 testen
+                    -- Hier nutzen wir die Argumente aus deinem SimpleSpy Log
+                    remote:FireServer(selectedEgg, 1)
                 end)
             end
-            task.wait(hatchDelay)
         end
-    else
-        warn("❌ Remote konnte nicht gefunden werden - Script abgebrochen.")
+        task.wait(hatchDelay)
     end
 end)
