@@ -1,35 +1,21 @@
--- Warten auf Core
+-- Warten auf das UI
 repeat task.wait() until getgenv().FarmHub and getgenv().FarmHub.CoreLoaded == true
 
 local Tab = getgenv().FarmHub.Tabs.Eggs
 local RS = game:GetService("ReplicatedStorage")
+local LP = game:GetService("Players").LocalPlayer
 
 local autoHatch = false
 local selectedEgg = "200M"
 local hatchDelay = 0.5
 
--- 1. Eier-Daten inklusive ID auslesen
-local function getEggData()
-    local eggs = {}
-    local success, data = pcall(function()
-        return require(RS:WaitForChild("Shared"):WaitForChild("List"):WaitForChild("Pets"):WaitForChild("Eggs"))
-    end)
-    
-    if success and type(data) == "table" then
-        return data
-    end
-    return nil
-end
+-- 1. UI ELEMENTE
+Tab:CreateSection("🥚 Verified Hatcher")
 
-local allEggData = getEggData()
-
--- 2. UI
-Tab:CreateSection("🥚 Advanced Hatcher (Token Sync)")
-
-local Dropdown = Tab:CreateDropdown({
+Tab:CreateDropdown({
     Name = "Select Egg",
-    Options = {"200M", "Forest", "Desert"}, -- Erweitert sich automatisch
-    CurrentOption = {selectedEgg},
+    Options = {"200M", "Forest", "Desert"}, 
+    CurrentOption = {"200M"},
     Callback = function(opt) selectedEgg = opt[1] end
 })
 
@@ -38,36 +24,48 @@ Tab:CreateToggle({
     Callback = function(v) autoHatch = v end
 })
 
--- 3. DER SMART-FIRE LOOP
+Tab:CreateSlider({
+    Name = "Hatch Delay",
+    Range = {0.1, 2},
+    Increment = 0.1,
+    CurrentValue = 0.5,
+    Callback = function(v) hatchDelay = v end
+})
+
+-- 2. DIE FUNKTIONIERENDE LOGIK (An DuckyScriptz angelehnt)
 task.spawn(function()
     local botName = "jag k\195\164nner en bot, hon heter anna, anna heter hon"
     local KnitServices = RS:WaitForChild("Packages"):WaitForChild("Knit"):WaitForChild("Services")
     
-    while true do
-        if autoHatch and selectedEgg ~= "" then
-            -- Wir suchen die ID für das ausgewählte Ei
-            local eggToken = selectedEgg -- Fallback
-            if allEggData and allEggData[selectedEgg] then
-                -- Hier suchen wir nach der ID (wie 2026425) im Modul
-                eggToken = allEggData[selectedEgg].ID or allEggData[selectedEgg].Id or selectedEgg
-            end
-
-            -- Brute Force durch alle Ordner (wegen der Fake-Ordner)
-            for _, folder in ipairs(KnitServices:GetChildren()) do
-                if folder.Name == botName then
-                    local re = folder:FindFirstChild("RE")
-                    if re then
-                        local remote = re:FindFirstChild(botName)
-                        if remote then
-                            pcall(function()
-                                -- Wir feuern BEIDE Varianten (Sicherheitscheck)
-                                remote:FireServer(selectedEgg, 2) -- Variante 1: Name
-                                remote:FireServer(tostring(2026425), 2) -- Variante 2: Deine ID aus dem Log
-                            end)
-                        end
+    -- Wir suchen die ECHTE Remote durch Validierung der Parents
+    local function getFunctionalRemote()
+        for _, service in ipairs(KnitServices:GetChildren()) do
+            if service.Name == botName then
+                local re = service:FindFirstChild("RE")
+                if re then
+                    local remote = re:FindFirstChild(botName)
+                    -- Ein echter Knit-Service hat meistens diese Struktur
+                    if remote and remote:IsA("RemoteEvent") then
+                        return remote
                     end
                 end
             end
+        end
+        return nil
+    end
+
+    local Remote = getFunctionalRemote()
+
+    while true do
+        if autoHatch and selectedEgg ~= "" and Remote then
+            pcall(function()
+                -- DuckyScriptz nutzt oft den Direktanruf mit den geloggten IDs
+                -- Wir feuern den Namen und den Token (2026425) direkt hintereinander
+                Remote:FireServer(selectedEgg, 2)
+                
+                -- Falls das Spiel einen Token-Check hat (wie in deinem Bild 10011):
+                Remote:FireServer("2026425", 1)
+            end)
         end
         task.wait(hatchDelay)
     end
